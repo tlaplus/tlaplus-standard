@@ -274,133 +274,181 @@ TLAPlusGrammar ==
                                                 tok("MODULE") & Name ))
                       ) \ Nil
 
-   /\ G.Expression ::= 
-
-\*          G.GeneralIdentifier
-
-            Name & (Nil | tok("(") & CommaList(Identifier) & tok(")")) 
-               & tok("::") & G.Expression
-
+   /\ G.Expression ::=
+            G.Label
          |  G.InstOrSubexprPrefix & G.SubexprTreeNav
-
          |  G.GeneralIdentifier
-
          |  ProofStepId
-
-         |  PrefixOp & G.Expression 
-
-         |  G.Expression & InfixOp & G.Expression 
-
+         |  PrefixOp & G.Expression
+         |  G.Expression & InfixOp & G.Expression
          |  G.Expression & PostfixOp
+         |  G.Parentheses
+         |  G.BoundedQuantification
+         |  G.UnboundedQuantification
+         |  G.Choose
+         |  G.SetLiteral
+         |  G.SetFilter
+         |  G.SetMap
+         |  G.FunctionApplication
+         |  G.FunctionLiteral
+         |  G.FunctionSet
+         |  G.RecordLiteral
+         |  G.RecordSet
+         |  G.Except
+         |  G.RecordValue
+         |  G.TupleLiteral
+         |  G.CartesianProduct
+         |  G.StepExpressionOrStutter
+         |  G.StepExpressionNoStutter
+         |  G.Fairness
+         |  G.IfThenElse
+         |  G.Case
+         |  G.LetIn
+         |  G.ConjunctionList
+         |  G.DisjunctionList
+         |  Number
+         |  String
+         |  tok("@")
 
-         |  tok("(") & G.Expression & tok(")") 
+   /\ G.SubscriptExpression ::=
+            G.GeneralIdentifier
+         |  G.Parenthesis
+         |  G.SetLiteral
+         |  G.SetFilter
+         |  G.SetMap
+         |  G.FunctionLiteral
+         |  G.FunctionSet
+         |  G.RecordLiteral
+         |  G.RecordSet
+         |  G.Except
+         |  G.TupleLiteral
+         |  G.StepExpressionOrStutter
+         |  G.StepExpressionNoStutter
 
-         |   Tok({"\\A", "\\E"}) 
-           & CommaList(G.QuantifierBound)   
-           & tok(":") 
-           & G.Expression 
+   /\ G.Label ::=
+            Name & (Nil | tok("(") & CommaList(Identifier) & tok(")"))
+         &  tok("::") & G.Expression
 
-         |    Tok({"\\A", "\\E", "\\AA", "\\EE"})
-           &  CommaList(Identifier) 
-           &  tok(":") 
-           &  G.Expression 
+   /\ G.Parentheses ::= tok("(") & G.Expression & tok(")")
 
-        |     tok("CHOOSE") 
-           &  IdentifierOrTuple 
-           &  (Nil | tok("\\in") & G.Expression) 
-           &  tok(":") 
-           &  G.Expression 
+   /\ G.BoundedQuantification ::=
+            Tok({"\\A", "\\E"})
+         &  CommaList(G.QuantifierBound)
+         &  tok(":")
+         &  G.Expression
 
-        |     tok("{")
-           & (Nil | CommaList(G.Expression))
-           & tok("}") 
+   /\ G.UnboundedQuantification ::=
+            Tok({"\\A", "\\E", "\\AA", "\\EE"})
+         &  CommaList(Identifier)
+         &  tok(":")
+         &  G.Expression
 
-        |     tok("{") 
-           &  IdentifierOrTuple & tok("\\in") & G.Expression 
-           &  tok(":") 
-           &  G.Expression 
-           &  tok("}") 
+   /\ G.Choose ::=
+            tok("CHOOSE")
+         &  IdentifierOrTuple
+         &  (Nil | tok("\\in") & G.Expression)
+         &  tok(":")
+         &  G.Expression
 
-        |     tok("{") 
-           &  G.Expression  
-           &  tok(":")  
-           &  CommaList(G.QuantifierBound) 
-           &  tok("}") 
+   /\ G.SetLiteral ::=
+            tok("{")
+         &  (Nil | CommaList(G.Expression))
+         &  tok("}")
 
-        |  G.Expression & tok("[") & CommaList(G.Expression)
-             & tok("]")
+   /\ G.SetFilter ::=
+            tok("{")
+         &  IdentifierOrTuple & tok("\\in") & G.Expression
+         &  tok(":")
+         &  G.Expression
+         &  tok("}")
 
-        |     tok("[") 
-           &  CommaList(G.QuantifierBound)
-           &  tok("|->")  
-           &  G.Expression 
-           &  tok("]") 
+   /\ G.SetMap ::=
+            tok("{")
+         &  G.Expression
+         &  tok(":")
+         &  CommaList(G.QuantifierBound)
+         &  tok("}")
 
-       |  tok("[") & G.Expression & tok("->") 
-                 & G.Expression & tok("]") 
+   /\ G.FunctionApplication ::=
+            G.Expression
+         &  tok("[") & CommaList(G.Expression) & tok("]")
 
-       |     tok("[") 
-           & CommaList(Name & tok("|->") & G.Expression) 
-           & tok("]") 
+   /\ G.FunctionLiteral ::=
+            tok("[")
+         &  CommaList(G.QuantifierBound)
+         &  tok("|->")
+         &  G.Expression
+         &  tok("]")
 
-       |     tok("[") 
-           & CommaList(Name & tok(":") & G.Expression)  
-           & tok("]") 
+   /\ G.FunctionSet ::=
+            tok("[")
+         &  G.Expression & tok("->")
+         &  G.Expression & tok("]")
 
-       |      tok("[") 
-           &  G.Expression 
-           &  tok("EXCEPT") 
-           &  CommaList(    tok("!")
-                         & ( tok(".") & Name 
-                             |  tok("[") & CommaList(G.Expression) & tok("]") )^+ 
-                         &  tok("=") & G.Expression ) 
-           &  tok("]") 
+   /\ G.RecordLiteral ::=
+            tok("[")
+         &  CommaList(Name & tok("|->") & G.Expression)
+         &  tok("]")
 
-      |  G.Expression & tok(".") & Name
+   /\ G.RecordSet ::=
+            tok("[")
+         &  CommaList(Name & tok(":") & G.Expression)
+         &  tok("]")
 
-      |  tok("<<") & (CommaList(G.Expression) | Nil) & tok(">>") 
+   /\ G.Except ::=
+            tok("[")
+         &  G.Expression
+         &  tok("EXCEPT")
+         &  CommaList(
+                  tok("!")
+               &  ( tok(".") & Name
+                    |  tok("[") & CommaList(G.Expression) & tok("]") )^+
+               &  tok("=") & G.Expression )
+         &  tok("]")
 
-      |  G.Expression & (Tok({"\\X", "\\times"}) 
-              & G.Expression)^+ 
+   /\ G.RecordValue ::= G.Expression & tok(".") & Name
 
-      |  tok("[")  & G.Expression & tok("]_")  
-           & G.Expression 
+   /\ G.TupleLiteral ::=
+            tok("<<") & (Nil | CommaList(G.Expression)) & tok(">>")
 
-      | tok("<<") & G.Expression & tok(">>_") & G.Expression 
+   /\ G.CartesianProduct ::=
+            G.Expression
+         &  (Tok({"\\X", "\\times"}) & G.Expression)^+
 
-      |       Tok({"WF_", "SF_"}) 
-           & G.Expression  
-           & tok("(") & G.Expression & tok(")") 
+   /\ G.StepExpressionOrStutter ::=
+            tok("[") & G.Expression & tok("]_") & G.SubscriptExpression
 
-      |       tok("IF")   & G.Expression 
-           & tok("THEN")  & G.Expression  
-           & tok("ELSE") & G.Expression 
+   /\ G.StepExpressionNoStutter ::=
+            tok("<<") & G.Expression & tok(">>_") & G.SubscriptExpression
 
-      |  tok("CASE") 
-         &  ( LET CaseArm == 
-                     G.Expression & tok("->") & G.Expression
+   /\ G.Fairness ::=
+            Tok({"WF_", "SF_"})
+         &  G.SubscriptExpression
+         &  tok("(") & G.Expression & tok(")")
+
+   /\ G.IfThenElse ::=
+            tok("IF")   & G.Expression
+         &  tok("THEN") & G.Expression
+         &  tok("ELSE") & G.Expression
+
+   /\ G.Case ::=
+            tok("CASE")
+         &  ( LET CaseArm == G.Expression & tok("->") & G.Expression
               IN  CaseArm & (tok("[]") & CaseArm)^* )
+         &  ( Nil | (tok("[]") & tok("OTHER") & tok("->") & G.Expression))
 
-         &  (      Nil 
-              |  (tok("[]") & tok("OTHER") & tok("->") & G.Expression)) 
+   /\ G.LetIn ::=
+            tok("LET")
+         &  (    G.OperatorDefinition
+              |  G.FunctionDefinition
+              |  G.ModuleDefinition
+              |  G.Recursive)^+
+         &  tok("IN")
+         &  G.Expression
 
-     |        tok("LET") 
-           &  (    G.OperatorDefinition 
-                |  G.FunctionDefinition 
-                |  G.ModuleDefinition
-                |  G.Recursive)^+
-           &  tok("IN") 
-           &  G.Expression
+   /\ G.ConjunctionList ::= (tok("/\\") & G.Expression)^+
 
-     |  (tok("/\\") & G.Expression)^+ 
-
-     |  (tok("\\/") & G.Expression)^+ 
-
-     |  Number 
-
-     |  String 
-
-     |  tok("@")
+   /\ G.DisjunctionList ::= (tok("\\/") & G.Expression)^+
 
 IN LeastGrammar(P)
 
