@@ -42,16 +42,27 @@ NumberLexeme ==
 
 Number == Tok(NumberLexeme)
 
-ProofStepId == Tok({"<"} & (Numeral^+ | {"*"}) & {">"} & (Letter | Numeral | {"_"})^+)
+\* Modified by ahelwer on May 11, 2021
+\* Removed _ from possible characters in proof step ID name
+ProofStepId == Tok({"<"} & (Numeral^+ | {"*"}) & {">"} & (Letter | Numeral)^+)
 
 BeginStepToken == Tok({"<"} & (Numeral^+ | {"*", "+"}) & {">"} & 
                        (Letter | Numeral)^* & {"."}^* )
 
 String == Tok({"\""} & STRING & {"\""})
 
+\* Modified by ahelwer on May 26, 2021
+\* Split rules to distinguish cases where -. is used instead of -
+\* Any place you see StandalonePrefixOp used was modified for this purpose
+PrefixOpExceptNegative ==
+  { "~", "\\lnot", "\\neg", "[]", "<>",
+    "DOMAIN",  "ENABLED", "SUBSET", "UNCHANGED", "UNION"}
+
+StandalonePrefixOp ==
+  Tok(PrefixOpExceptNegative \cup {"-."})
+
 PrefixOp  ==  
-  Tok({ "-", "~", "\\lnot", "\\neg", "[]", "<>",
-        "DOMAIN",  "ENABLED", "SUBSET", "UNCHANGED", "UNION"})
+  Tok(PrefixOpExceptNegative \cup {"-"})
 
 InfixOp   ==
   Tok({  "!!",  "#",    "##",   "$",    "$$",   "%",    "%%",  
@@ -76,6 +87,7 @@ InfixOp   ==
          "\\equiv",   "\\oplus",     "\\sqsupset",   "\\notin"     })
 
 PostfixOp ==  Tok({ "^+",  "^*", "^#", "'" })
+
 TLAPlusGrammar ==
  LET P(G) ==
    /\ G.Module ::=     AtLeast4("-") 
@@ -109,23 +121,23 @@ TLAPlusGrammar ==
    /\ G.OpDecl ::=      Identifier 
                      |  Identifier & tok("(") & 
                                CommaList(tok("_")) & tok(")")
-                     |  PrefixOp & tok("_")
+                     |  StandalonePrefixOp & tok("_")
                      |  tok("_") & InfixOp & tok("_")
                      |  tok("_") & PostfixOp  
+
    /\  G.OperatorDefinition ::=  
             (   G.NonFixLHS 
-             |  PrefixOp   & Identifier 
+             |  StandalonePrefixOp   & Identifier 
              |  Identifier & InfixOp & Identifier 
              |  Identifier & PostfixOp )
           &  tok("==") 
           &  G.Expression
 
+   \* Modified by ahelwer on May 25, 2021
+   \* Simplified definition by removing duplicated | elements
    /\ G.NonFixLHS ::=   
              Identifier 
-          &  (    Nil 
-              |   tok("(") 
-                & CommaList(Identifier |  G.OpDecl) 
-                & tok(")") ) 
+          &  ( Nil | tok("(") & CommaList(G.OpDecl) & tok(")") )
 
    /\ G.FunctionDefinition ::=   
            Identifier  
@@ -144,44 +156,67 @@ TLAPlusGrammar ==
         &  (Nil | tok("WITH") & CommaList(G.Substitution))  
 
    /\ G.Substitution ::=  
-             (Identifier | PrefixOp | InfixOp | PostfixOp ) 
+             (Identifier | StandalonePrefixOp | InfixOp | PostfixOp ) 
           &  tok("<-") 
-          &  G.Argument  
+          &  G.OpOrExpression 
 
-   /\ G.Argument ::= G.Expression  | G.Opname | G.Lambda
+   \* Modified by ahelwer on April 29, 2021
+   \* Defined common OpOrExpression rule to simplify rules elsewhere
+   /\ G.OpOrExpression ::=
+          StandalonePrefixOp | InfixOp | PostfixOp | G.Lambda | G.Expression
+
+   \* Modified by ahelwer on May 25, 2021
+   \* Removed rule subsumed by simpler OpOrExpression rule
+\* /\ G.Argument ::=...
 
    /\ G.Lambda ::= tok("LAMBDA") & CommaList(Identifier) 
                      & tok(":") & G.Expression
 
-   /\ G.OpName ::= 
-        (Identifier | PrefixOp | InfixOp | PostfixOp | ProofStepId)
-      & (  tok("!")
-         & (Identifier | PrefixOp | InfixOp | PostfixOp
-              | Tok({"<<", ">>", "@"} \cup Numeral^+) )
-        )^*
+   \* Modified by ahelwer on May 25, 2021
+   \* Removed rule subsumed by simpler OpOrExpression rule
+\* /\ G.OpName ::=...
 
-   /\ G.OpArgs ::= tok("(") & CommaList(G.Argument) & tok(")")
+   /\ G.OpArgs ::= tok("(") & CommaList(G.OpOrExpression) & tok(")")
 
-   /\ G.InstOrSubexprPrefix ::=  
-      (    (Nil | ProofStepId & tok("!")) 
-        & ( (   Identifier & (Nil | G.OpArgs)
-              | Tok({"<<", ">>", ":"} \cup Numeral^+)
-              | G.OpArgs 
-              | (PrefixOp | PostfixOp) & tok("(") & G.Expression & tok(")")
-              | InfixOp & tok("(") & G.Expression & tok(",") 
-                  & G.Expression & tok(")")
-             )
-            &  tok("!")
-          ) ^*
-      ) \ Nil
+   \* Modified by ahelwer on May 25, 2021
+   \* Defined common SubexprComponent and SubexprTreeNav rules
+   \* Ensured rule must start with either operator or proof step ID
+   \* Allowed use of @ as a parse tree navigation expression
+   /\ G.InstOrSubexprPrefix ::=
+           (G.SubexprComponent | ProofStepId) & tok("!")
+        &  ((G.SubexprComponent | G.SubexprTreeNav) & tok("!"))^*
+   
+   /\ G.SubexprComponent ::=
+           G.BoundOp
+        |  G.BoundNonfixOp
+        |  StandalonePrefixOp
+        |  InfixOp
+        |  PostfixOp
+
+   /\ G.SubexprTreeNav ::=
+           Tok({"<<", ">>", ":", "@"} \cup Numeral^+)
+        |  G.OpArgs
+
+   /\ G.BoundOp ::= Identifier & (Nil | G.OpArgs)
+
+   \* Modified by ahelwer on June 17, 2021
+   \* Added missing definition of nonfix operators to grammar
+   /\ G.BoundNonfixOp ::=
+           StandalonePrefixOp & tok("(") & G.Expression & tok(")")
+        |  InfixOp & tok("(") & G.Expression & tok(",")
+             & G.Expression & tok(")")
+        |  PostfixOp & tok("(") & G.Expression & tok(")")
 
 \* /\ G.InstancePrefix ::= ...
 
-   /\ G.GeneralIdentifier ::= 
-           (G.InstOrSubexprPrefix | Nil) & Identifier 
-         | ProofStepId
+   \* Modified by ahelwer on May 26, 2021
+   \* Moved ProofStepId from GeneralIdentifier to Expression rule
+   \* Moved optional parameters from Expression to GeneralIdentifier rule
+   \* Optional parameters became choice between BoundOp and BoundNonfixOp
+   /\ G.GeneralIdentifier ::=
+           (Nil | G.InstOrSubexprPrefix)
+        &  (G.BoundOp | G.BoundNonfixOp)
 
-\* /\ G.GeneralIdentifier ::= ...
 \* /\ G.GeneralPrefixOp   ::= ...
 \* /\ G.GeneralInfixOp    ::= ...
 \* /\ G.GeneralPostfixOp  ::= ...
@@ -256,29 +291,26 @@ TLAPlusGrammar ==
    /\ G.QEDStep ::= 
         BeginStepToken &  tok("QED") & (Nil | G.Proof)
 
-   /\ G.UseOrHide ::=   (  (tok("USE") & (Nil | tok("ONLY")))
-                         | tok("HIDE") )
-                       & G.UseBody
+   \* Modified by ahelwer on Feb 12, 2023
+   \* Removed optional ONLY from USE ONLY expr
+   /\ G.UseOrHide ::= (tok("USE") | tok("HIDE")) & G.UseBody
 
    /\ G.UseBody  ::=  (  (Nil | CommaList(G.Expression | tok("MODULE") & Name ))
                        & (Nil | Tok({"DEF", "DEFS"}) 
-                                  & CommaList(G.OpName | 
+                                  & CommaList(G.OpOrExpression | 
                                                 tok("MODULE") & Name ))
                       ) \ Nil
 
-
    /\ G.Expression ::= 
-
-\*          G.GeneralIdentifier
 
             Name & (Nil | tok("(") & CommaList(Identifier) & tok(")")) 
                & tok("::") & G.Expression
 
-         |  G.InstOrSubexprPrefix 
-               & (Tok({"<<", ">>", ":"} \cup Numeral^+) | G.OpArgs)
+         |  G.InstOrSubexprPrefix & G.SubexprTreeNav
 
+         |  G.GeneralIdentifier
 
-         |  G.GeneralIdentifier & (Nil | G.OpArgs)
+         |  ProofStepId
 
          |  PrefixOp & G.Expression 
 
@@ -377,10 +409,13 @@ TLAPlusGrammar ==
          &  (      Nil 
               |  (tok("[]") & tok("OTHER") & tok("->") & G.Expression)) 
 
+     \* Modified by ahelwer on April 29, 2021
+     \* RECURSIVE can be used inside LET-IN blocks
      |        tok("LET") 
            &  (    G.OperatorDefinition 
                 |  G.FunctionDefinition 
-                |  G.ModuleDefinition)^+ 
+                |  G.ModuleDefinition
+                |  G.Recursive)^+
            &  tok("IN") 
            &  G.Expression
 
